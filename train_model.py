@@ -1,3 +1,4 @@
+
 import json
 import joblib
 import numpy as np
@@ -12,44 +13,33 @@ from sklearn.metrics import accuracy_score, confusion_matrix
 
 def main():
     np.random.seed(42)
+    n = 300
 
-    students = 300
+    marks = np.random.randint(10, 101, n)
+    attendance = np.random.randint(40, 101, n)
+    assignments = np.random.randint(10, 101, n)
 
-    internal_marks = np.random.randint(10, 101, students)
-    attendance = np.random.randint(40, 101, students)
-    assignment_marks = np.random.randint(10, 101, students)
-
-    total_score = (
-        0.5 * internal_marks
-        + 0.3 * assignment_marks
-        + 0.2 * attendance
-    )
-
-    passed = (
-        (total_score >= 50)
-        & (attendance >= 65)
-    ).astype(int)
+    score = 0.5 * marks + 0.3 * assignments + 0.2 * attendance
+    passed = ((score >= 50) & (attendance >= 65)).astype(int)
 
     data = pd.DataFrame({
-        "internal_marks": internal_marks,
+        "internal_marks": marks,
         "attendance": attendance,
-        "assignment_marks": assignment_marks,
+        "assignment_marks": assignments,
         "passed": passed
     })
 
     data.to_csv("student_results.csv", index=False)
 
-    X = data[
-        ["internal_marks", "attendance", "assignment_marks"]
-    ]
+    X = data[[
+        "internal_marks",
+        "attendance",
+        "assignment_marks"
+    ]]
     y = data["passed"]
 
     X_train, X_test, y_train, y_test = train_test_split(
-        X,
-        y,
-        test_size=0.2,
-        random_state=42,
-        stratify=y
+        X, y, test_size=0.2, random_state=42, stratify=y
     )
 
     model = Pipeline([
@@ -58,18 +48,15 @@ def main():
     ])
 
     model.fit(X_train, y_train)
-
     predictions = model.predict(X_test)
 
     accuracy = accuracy_score(y_test, predictions)
-    matrix = confusion_matrix(
-        y_test, predictions, labels=[0, 1]
-    )
+    matrix = confusion_matrix(y_test, predictions, labels=[0, 1])
 
     joblib.dump(model, "student_result_model.pkl")
 
     metrics = {
-        "accuracy": round(float(accuracy), 4),
+        "accuracy": float(accuracy),
         "confusion_matrix": matrix.tolist(),
         "training_rows": len(X_train),
         "testing_rows": len(X_test)
@@ -79,8 +66,8 @@ def main():
         json.dump(metrics, file, indent=4)
 
     print("Model training completed.")
-    print("Accuracy:", accuracy)
-    print("Confusion Matrix:")
+    print(f"Accuracy: {accuracy:.4f}")
+    print("Confusion matrix:")
     print(matrix)
 
 
