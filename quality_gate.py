@@ -1,6 +1,6 @@
+
 import json
 import sys
-
 
 MINIMUM_ACCURACY = 0.85
 
