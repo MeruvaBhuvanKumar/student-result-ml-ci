@@ -19,10 +19,9 @@ class TestPredictionApplication(unittest.TestCase):
         response = self.client.post(
             "/predict",
             json={
-                "attendance": 90,
                 "internal_marks": 85,
-                "assignment_marks": 88,
-                "previous_score": 80
+                "attendance": 90,
+                "assignment_marks": 88
             }
         )
 
@@ -36,10 +35,9 @@ class TestPredictionApplication(unittest.TestCase):
         response = self.client.post(
             "/predict",
             json={
-                "attendance": 55,
                 "internal_marks": 30,
-                "assignment_marks": 40,
-                "previous_score": 35
+                "attendance": 55,
+                "assignment_marks": 40
             }
         )
 
@@ -53,8 +51,8 @@ class TestPredictionApplication(unittest.TestCase):
         response = self.client.post(
             "/predict",
             json={
-                "attendance": 90,
-                "internal_marks": 85
+                "internal_marks": 85,
+                "attendance": 90
             }
         )
 
