@@ -1,70 +1,73 @@
 
-from pathlib import Path
-
+import json
 import joblib
+import numpy as np
 import pandas as pd
-from flask import Flask, jsonify, request
 
-app = Flask(__name__)
-
-MODEL_PATH = Path("student_result_model.pkl")
-
-FEATURES = [
-    "internal_marks",
-    "attendance",
-    "assignment_marks"
-]
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, confusion_matrix
 
 
-def load_model():
-    if not MODEL_PATH.exists():
-        raise FileNotFoundError(
-            "student_result_model.pkl was not found. "
-            "Run the training pipeline first."
-        )
-    return joblib.load(MODEL_PATH)
+def main():
+    np.random.seed(42)
+    n = 300
 
+    marks = np.random.randint(10, 101, n)
+    attendance = np.random.randint(40, 101, n)
+    assignments = np.random.randint(10, 101, n)
 
-@app.get("/")
-def health_check():
-    return jsonify({
-        "status": "ok",
-        "service": "student-result-prediction"
+    score = 0.5 * marks + 0.3 * assignments + 0.2 * attendance
+    passed = ((score >= 50) & (attendance >= 65)).astype(int)
+
+    data = pd.DataFrame({
+        "internal_marks": marks,
+        "attendance": attendance,
+        "assignment_marks": assignments,
+        "passed": passed
     })
 
+    data.to_csv("student_results.csv", index=False)
 
-@app.post("/predict")
-def predict():
-    data = request.get_json(silent=True)
-
-    if not data:
-        return jsonify({"error": "JSON request body is required"}), 400
-
-    missing_fields = [
-        feature for feature in FEATURES
-        if feature not in data
+    X = data[
+        ["internal_marks", "attendance", "assignment_marks"]
     ]
+    y = data["passed"]
 
-    if missing_fields:
-        return jsonify({
-            "error": "Missing required fields",
-            "missing_fields": missing_fields
-        }), 400
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42, stratify=y
+    )
 
-    sample = pd.DataFrame([{
-        feature: data[feature]
-        for feature in FEATURES
-    }])
+    model = Pipeline([
+        ("scaler", StandardScaler()),
+        ("classifier", LogisticRegression(max_iter=1000))
+    ])
 
-    model = load_model()
-    prediction_code = int(model.predict(sample)[0])
-    prediction = "PASS" if prediction_code == 1 else "FAIL"
+    model.fit(X_train, y_train)
+    predictions = model.predict(X_test)
 
-    return jsonify({
-        "prediction": prediction,
-        "prediction_code": prediction_code
-    })
+    accuracy = accuracy_score(y_test, predictions)
+    matrix = confusion_matrix(y_test, predictions, labels=[0, 1])
+
+    joblib.dump(model, "student_result_model.pkl")
+
+    metrics = {
+        "accuracy": float(accuracy),
+        "confusion_matrix": matrix.tolist(),
+        "training_rows": len(X_train),
+        "testing_rows": len(X_test)
+    }
+
+    with open("metrics.json", "w") as file:
+        json.dump(metrics, file, indent=4)
+
+    print("Model training completed.")
+    print(f"Accuracy: {accuracy:.4f}")
+    print("Confusion matrix:")
+    print(matrix)
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    main()
