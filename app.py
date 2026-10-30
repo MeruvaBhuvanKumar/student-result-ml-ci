@@ -1,3 +1,4 @@
+
 from pathlib import Path
 
 import joblib
@@ -9,10 +10,9 @@ app = Flask(__name__)
 MODEL_PATH = Path("student_result_model.pkl")
 
 FEATURES = [
-    "attendance",
     "internal_marks",
-    "assignment_marks",
-    "previous_score"
+    "attendance",
+    "assignment_marks"
 ]
 
 
