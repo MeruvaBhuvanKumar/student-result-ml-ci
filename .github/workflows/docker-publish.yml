@@ -1,0 +1,73 @@
+
+name: Docker Build Test and Publish to GHCR
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  docker-build-test-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Build Docker image
+        run: |
+          docker build -t student-result-prediction:ci .
+
+      - name: Start test container
+        run: |
+          docker run -d \
+            --name student-result-publish-test \
+            -p 5000:5000 \
+            student-result-prediction:ci
+
+      - name: Check application health
+        run: |
+          for i in {1..15}; do
+            if curl --fail --silent http://localhost:5000/health; then
+              echo "Application health check passed."
+              exit 0
+            fi
+
+            echo "Waiting for application... attempt $i"
+            sleep 2
+          done
+
+          echo "Health check failed."
+          docker logs student-result-publish-test || true
+          exit 1
+
+      - name: Stop and remove test container
+        if: always()
+        run: |
+          docker rm -f student-result-publish-test || true
+
+      - name: Log in to GitHub Container Registry
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io \
+            -u "${{ github.actor }}" \
+            --password-stdin
+
+      - name: Tag Docker image
+        run: |
+          IMAGE_ID="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/student-result-prediction"
+
+          docker tag student-result-prediction:ci "$IMAGE_ID:latest"
+          docker tag student-result-prediction:ci "$IMAGE_ID:sha-${GITHUB_SHA}"
+
+      - name: Push Docker image to GHCR
+        run: |
+          IMAGE_ID="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/student-result-prediction"
+
+          docker push "$IMAGE_ID:latest"
+          docker push "$IMAGE_ID:sha-${GITHUB_SHA}"
