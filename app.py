@@ -6,14 +6,6 @@ import pandas as pd
 from flask import Flask, jsonify, request
 
 app = Flask(__name__)
-@app.get("/")
-def health_check():
-    return jsonify({
-        "status": "ok",
-        "service": "student-result-prediction",
-        "deployment": "Practical-10",
-        "message": "Latest Docker image deployed successfully"
-    })
 
 MODEL_PATH = Path("student_result_model.pkl")
 
@@ -37,8 +29,15 @@ def load_model():
 def health_check():
     return jsonify({
         "status": "ok",
-        "service": "student-result-prediction"
+        "service": "student-result-prediction",
+        "deployment": "Practical-10",
+        "message": "Latest Docker image deployed successfully"
     })
+
+
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({"status": "healthy"}), 200
 
 
 @app.post("/predict")
