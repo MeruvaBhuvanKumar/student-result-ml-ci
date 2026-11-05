@@ -7,7 +7,8 @@ from pathlib import Path
 
 import joblib
 import pandas as pd
-from flask import Flask, jsonify, request, g
+from flask import Flask, jsonify, request, g, Response
+from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
 
 app = Flask(__name__)
 
@@ -31,6 +32,33 @@ FEATURES = [
 
 model = None
 
+# Prometheus Metrics
+
+HTTP_REQUESTS = Counter(
+    "student_api_http_requests_total",
+    "Total HTTP requests received by the Student Result Prediction API",
+    ["method", "path", "status"]
+)
+
+HTTP_LATENCY = Histogram(
+    "student_api_http_request_duration_seconds",
+    "HTTP request duration in seconds",
+    ["method", "path"]
+)
+
+PREDICTIONS = Counter(
+    "student_api_predictions_total",
+    "Total Student Result Prediction attempts",
+    ["result"]
+)
+
+MODEL_LOADED = Gauge(
+    "student_api_model_loaded",
+    "Whether the Student Result Prediction model is loaded"
+)
+
+MODEL_LOADED.set(0)
+
 
 # Request tracking
 @app.before_request
@@ -47,7 +75,21 @@ def after_request(response):
     request_id = getattr(g, "request_id", "unknown")
     start_time = getattr(g, "start_time", time.perf_counter())
 
-    duration_ms = (time.perf_counter() - start_time) * 1000
+    duration_seconds = time.perf_counter() - start_time
+    duration_ms = duration_seconds * 1000
+
+    # Exclude Prometheus scraping from user traffic metrics
+    if request.path != "/metrics":
+        HTTP_REQUESTS.labels(
+            method=request.method,
+            path=request.path,
+            status=str(response.status_code)
+        ).inc()
+
+        HTTP_LATENCY.labels(
+            method=request.method,
+            path=request.path
+        ).observe(duration_seconds)
 
     log_method = logger.warning if response.status_code >= 400 else logger.info
 
@@ -78,13 +120,19 @@ def load_model():
 
             model = joblib.load(MODEL_PATH)
 
+            MODEL_LOADED.set(1)
+
             logger.info(
                 "event=model_loaded model_file=%s",
                 MODEL_PATH
             )
 
         except Exception:
-            logger.exception("event=model_load_failed")
+            MODEL_LOADED.set(0)
+            logger.exception(
+                "event=model_load_failed model_file=%s",
+                MODEL_PATH
+            )
             raise
 
     return model
@@ -147,9 +195,15 @@ def predict():
 
         loaded_model = load_model()
 
-        prediction_code = int(
-            loaded_model.predict(sample)[0]
-        )
+        try:
+            prediction_code = int(
+                loaded_model.predict(sample)[0]
+            )
+            PREDICTIONS.labels(result="success").inc()
+
+        except Exception:
+            PREDICTIONS.labels(result="error").inc()
+            raise
 
         prediction = "PASS" if prediction_code == 1 else "FAIL"
 
@@ -173,6 +227,15 @@ def predict():
         return jsonify({
             "error": "Prediction failed"
         }), 500
+
+
+# Prometheus metrics endpoint
+@app.get("/metrics")
+def metrics():
+    return Response(
+        generate_latest(),
+        content_type=CONTENT_TYPE_LATEST
+    )
 
 
 if __name__ == "__main__":
